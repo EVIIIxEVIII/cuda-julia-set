@@ -1,3 +1,3 @@
 ## A julia set generator implemented in CUDA
 
-![[example.png]]
+![Example](example.png)
