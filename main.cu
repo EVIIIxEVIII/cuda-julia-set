@@ -1,10 +1,16 @@
 #include <cuda_runtime.h>
 #include <stdio.h>
+#include <time.h>
 
-#define MAX_ITER 1000
 #define BLOCK_SIZE 32
-#define WIDTH 1920
-#define HEIGHT 1920
+#define WIDTH 7680
+#define HEIGHT 7680
+
+#define ZMAX 4.
+#define MAX_ITER 100
+#define CREAL -0.5251993
+#define CIMAGINARY -0.5251993
+
 #define CHECK_CUDA(call)                                                      \
     {                                                                         \
         cudaError_t err = call;                                               \
@@ -15,17 +21,20 @@
         }                                                                     \
     }
 
-__device__ int mandelbrot(double real, double imaginary) {
-    double zr = 0.;
-    double zi = 0.;
+double getTimeMicroseconds() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1e6 + ts.tv_nsec / 1e3;
+}
 
+__device__ int julia(double real, double imaginary, int n, double cr, double ci, double max) {
     int iter = 0;
-    for (iter = 0; iter < MAX_ITER; iter++) {
-        double temp = zr*zr - zi*zi + real;
-        zi = 2.0 * zr * zi + imaginary;
-        zr = temp;
+    for (iter = 0; iter < n; iter++) {
+        double temp = real*real - imaginary*imaginary + cr;
+        imaginary = 2.0 * real * imaginary + ci;
+        real = temp;
 
-        if (zr*zr + zi*zi > 4.) break;
+        if (real*real + imaginary*imaginary > max) break;
     }
 
     return iter;
@@ -39,11 +48,14 @@ __global__ void render_image(unsigned char* image, float xmax, float xmin, float
 
 
     double real =      xmin + (x / (double)WIDTH) * (xmax - xmin);
-    double imaginary = ymin + (y / (double)HEIGHT) * (ymax - ymin);
+    // here this strange formula is needed because the top left corder of the image
+    // is considered the (0, 0) origin
+    double imaginary = ymin + ((HEIGHT - 1 - y) / (double)HEIGHT) * (ymax - ymin);
 
-    int iterations = mandelbrot(real, imaginary);
+    int iterations = julia(real, imaginary, MAX_ITER, CREAL, CIMAGINARY, ZMAX);
 
-    image[y * WIDTH + x] = (unsigned char)(255 * iterations / MAX_ITER);
+    double intensity = atan(0.1 * iterations);
+    image[y * WIDTH + x] = (int)(intensity * 255);
 }
 
 void save_pgm(const char *filename, unsigned char *data) {
@@ -68,12 +80,15 @@ int main() {
     dim3 grid((WIDTH + BLOCK_SIZE - 1) / BLOCK_SIZE, (HEIGHT + BLOCK_SIZE - 1) / BLOCK_SIZE);
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
 
+    double start = getTimeMicroseconds();
     render_image<<<grid, block>>>(d_image, xmax, xmin, ymax, ymin);
     CHECK_CUDA(cudaDeviceSynchronize());
+    double end = getTimeMicroseconds();
+
     cudaMemcpy(h_image, d_image, sizeof(unsigned char) * WIDTH * HEIGHT, cudaMemcpyDeviceToHost);
 
-    save_pgm("test_2.pgm", h_image);
+    save_pgm("output.pgm", h_image);
 
-    printf("\n\nDONE\n\n");
+    printf("\n\nDONE in %lf microseconds \n\n", end - start);
     return 0;
 }
