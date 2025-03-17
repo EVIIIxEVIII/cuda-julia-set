@@ -8,8 +8,8 @@
 
 #define ZMAX 4.
 #define MAX_ITER 100
-#define CREAL -0.5251993
-#define CIMAGINARY -0.5251993
+#define CREAL -0.835
+#define CIMAGINARY -0.2321
 
 #define CHECK_CUDA(call)                                                      \
     {                                                                         \
@@ -87,7 +87,7 @@ int main() {
 
     cudaMemcpy(h_image, d_image, sizeof(unsigned char) * WIDTH * HEIGHT, cudaMemcpyDeviceToHost);
 
-    save_pgm("output.pgm", h_image);
+    save_pgm("spiral.pgm", h_image);
 
     printf("\n\nDONE in %lf microseconds \n\n", end - start);
     return 0;
